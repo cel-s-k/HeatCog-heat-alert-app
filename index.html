@@ -6,12 +6,14 @@
     <title>Heat Monitoring Dashboard</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body>
     <div id="root"></div>
+    
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState } = React;
 
         const CITIES = [
           { name: "Doha", lat: 25.2854, lon: 51.5310 },
@@ -60,7 +62,6 @@
 
         const TEMP_CUTOFF = 32;
 
-        // Lucide React icons as SVG components
         const Search = () => (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <circle cx="11" cy="11" r="8"></circle>
@@ -375,8 +376,8 @@
           );
         };
 
-        ReactDOM.render(<HeatMonitorDashboard />, document.getElementById('root'));
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<HeatMonitorDashboard />);
     </script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </body>
 </html>
