@@ -319,7 +319,7 @@
             setError(null);
             
             try {
-              const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&daily=temperature_2m_max&temperature_unit=celsius&timezone=auto&past_days=3&forecast_days=14`;
+              const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&daily=temperature_2m_max&temperature_unit=celsius&timezone=auto&past_days=3&forecast_days=16`;
               
               const response = await fetch(url);
 
@@ -346,14 +346,14 @@
             if (!temp) return 'bg-gray-300';
             if (temp > cutoff) return 'bg-red-500';
             if (temp >= 25 && temp > cutoff - 3 && temp <= cutoff) return 'bg-yellow-500';
-            return 'bg-blue-300';
+            return 'bg-blue-200';
           };
 
           const getTempBorderColor = (temp, cutoff) => {
             if (!temp) return 'border-gray-300';
             if (temp > cutoff) return 'border-red-600';
             if (temp >= 25 && temp > cutoff - 3 && temp <= cutoff) return 'border-yellow-600';
-            return 'border-blue-300';
+            return 'border-blue-200';
           };
 
           const findDataCollectionWindows = () => {
@@ -685,5 +685,6 @@
     </script>
 </body>
 </html>
+
 
 
