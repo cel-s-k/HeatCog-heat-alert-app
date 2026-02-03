@@ -346,14 +346,14 @@
             if (!temp) return 'bg-gray-300';
             if (temp > cutoff) return 'bg-red-500';
             if (temp >= 25 && temp > cutoff - 3 && temp <= cutoff) return 'bg-yellow-500';
-            return 'bg-blue-500';
+            return 'bg-blue-300';
           };
 
           const getTempBorderColor = (temp, cutoff) => {
             if (!temp) return 'border-gray-300';
             if (temp > cutoff) return 'border-red-600';
             if (temp >= 25 && temp > cutoff - 3 && temp <= cutoff) return 'border-yellow-600';
-            return 'border-blue-400';
+            return 'border-blue-300';
           };
 
           const findDataCollectionWindows = () => {
@@ -685,4 +685,5 @@
     </script>
 </body>
 </html>
+
 
