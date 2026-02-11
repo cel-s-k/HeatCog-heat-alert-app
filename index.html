@@ -345,7 +345,7 @@
           const getTempColor = (temp, cutoff) => {
             if (!temp) return 'bg-gray-300';
             if (temp > cutoff) return 'bg-red-500';
-            if (temp >= 15 && temp <= 25) return 'bg-teal-300';
+            if (temp >= 15 && temp <= 25) return 'bg-teal-800';
             if (temp > cutoff - 3 && temp <= cutoff) return 'bg-yellow-300';
             if (temp < 15) return 'bg-blue-200';
             return 'bg-yellow-300';
@@ -354,7 +354,7 @@
           const getTempBorderColor = (temp, cutoff) => {
             if (!temp) return 'border-gray-300';
             if (temp > cutoff) return 'border-red-600';
-            if (temp >= 15 && temp <= 25) return 'border-teal-400';
+            if (temp >= 15 && temp <= 25) return 'border-teal-900';
             if (temp > cutoff - 3 && temp <= cutoff) return 'border-yellow-400';
             if (temp < 15) return 'border-blue-200';
             return 'border-yellow-400';
@@ -506,8 +506,8 @@
             // Display only last 3 days of past + 16 days forecast (19 days total)
             // But keep all 30 days internally for calculations
             const weeks = [];
-            let currentWeek = [];
             const startIdx = Math.max(0, weatherData.daily.time.length - 19);
+            const displayDays = [];
             
             weatherData.daily.time.forEach((date, idx) => {
               // Only display from startIdx onwards
@@ -517,13 +517,28 @@
               const dayOfWeek = d.getDay();
               const adjustedDay = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
               
-              currentWeek.push({
+              displayDays.push({
                 date,
                 temp: weatherData.daily.temperature_2m_max[idx],
                 dayOfWeek: adjustedDay
               });
+            });
+            
+            // Organize into weeks starting from Monday (0 = Monday in adjustedDay)
+            let currentWeek = [];
+            
+            // Add padding at start if needed
+            const firstDay = displayDays[0];
+            const startingDayOfWeek = firstDay.dayOfWeek;
+            for (let i = 0; i < startingDayOfWeek; i++) {
+              currentWeek.push(null);
+            }
+            
+            // Add all display days
+            displayDays.forEach((day, idx) => {
+              currentWeek.push(day);
               
-              if (adjustedDay === 6 || idx === weatherData.daily.time.length - 1) {
+              if (day.dayOfWeek === 6 || idx === displayDays.length - 1) {
                 weeks.push([...currentWeek]);
                 currentWeek = [];
               }
@@ -554,9 +569,13 @@
             
             const windowStart = new Date(w.collectionStart);
             const windowEnd = new Date(w.collectionEnd);
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(0, 0, 0, 0);
             
-            // Show window if it overlaps with display range
-            return windowStart <= displayEnd && windowEnd >= displayStart;
+            // Only show windows that start from tomorrow onwards (not past or today)
+            // And overlap with display range
+            return windowStart <= displayEnd && windowEnd >= displayStart && windowStart >= tomorrow;
           });
 
           return (
@@ -702,7 +721,7 @@
                           <span>Cold (below 15°C)</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <div className="w-4 h-4 bg-teal-300 rounded"></div>
+                          <div className="w-4 h-4 bg-teal-800 rounded"></div>
                           <span>Not-Hot Range (15-25°C)</span>
                         </div>
                         <div className="flex items-center gap-2">
@@ -736,11 +755,10 @@
                               }
 
                               const temp = day.temp;
-                              const tooOld = isTooOld(day.date);
                               const today = isToday(day.date);
                               const collectionTypes = isDateInWindow(day.date);
                               const cutoff = selectedCity.cutoff;
-                              const noDataAvailable = tooOld || temp === null;
+                              const noDataAvailable = temp === null;
                               const noDataCollection = collectionTypes.length === 0 && !noDataAvailable;
 
                               const formatDateAbbrev = (dateStr) => {
@@ -757,7 +775,7 @@
                                   key={day.date}
                                   className={`aspect-square border-2 rounded-lg p-1 md:p-2 transition-all relative flex flex-col items-center justify-center ${
                                     noDataAvailable ? 'border-gray-400 bg-gray-100' : getTempBorderColor(temp, cutoff)
-                                  } ${collectionTypes.length > 0 ? 'ring-4 ring-orange-400 shadow-lg' : ''} ${
+                                  } ${collectionTypes.length > 0 && collectionTypes.includes('Hot') ? 'ring-4 ring-orange-400 shadow-lg' : ''} ${collectionTypes.length > 0 && collectionTypes.includes('NotHot') ? 'ring-4 ring-teal-800 shadow-lg' : ''} ${
                                     today ? 'ring-4 ring-green-600 shadow-lg' : ''
                                   } ${noDataAvailable ? 'opacity-40' : ''}`}
                                 >
