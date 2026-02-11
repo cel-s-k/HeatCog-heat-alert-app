@@ -503,19 +503,19 @@
           const organizeByWeeks = () => {
             if (!weatherData) return [];
             
+            // Display only last 3 days of past + 16 days forecast (19 days total)
+            // But keep all 30 days internally for calculations
             const weeks = [];
             let currentWeek = [];
+            const startIdx = Math.max(0, weatherData.daily.time.length - 19);
             
             weatherData.daily.time.forEach((date, idx) => {
+              // Only display from startIdx onwards
+              if (idx < startIdx) return;
+              
               const d = new Date(date);
               const dayOfWeek = d.getDay();
               const adjustedDay = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-              
-              if (idx === 0 && adjustedDay > 0) {
-                for (let i = 0; i < adjustedDay; i++) {
-                  currentWeek.push(null);
-                }
-              }
               
               currentWeek.push({
                 date,
@@ -524,9 +524,6 @@
               });
               
               if (adjustedDay === 6 || idx === weatherData.daily.time.length - 1) {
-                while (currentWeek.length < 7) {
-                  currentWeek.push(null);
-                }
                 weeks.push([...currentWeek]);
                 currentWeek = [];
               }
@@ -535,8 +532,32 @@
             return weeks;
           };
 
-          const windows = weatherData && selectedCity ? findDataCollectionWindows() : [];
+          const allWindows = weatherData && selectedCity ? findDataCollectionWindows() : [];
           const weeks = organizeByWeeks();
+
+          // Filter windows to only show those that overlap with the displayed calendar range
+          const getDisplayStartDate = () => {
+            if (!weatherData) return null;
+            const startIdx = Math.max(0, weatherData.daily.time.length - 19);
+            return new Date(weatherData.daily.time[startIdx]);
+          };
+
+          const getDisplayEndDate = () => {
+            if (!weatherData) return null;
+            return new Date(weatherData.daily.time[weatherData.daily.time.length - 1]);
+          };
+
+          const windows = allWindows.filter(w => {
+            const displayStart = getDisplayStartDate();
+            const displayEnd = getDisplayEndDate();
+            if (!displayStart || !displayEnd) return false;
+            
+            const windowStart = new Date(w.collectionStart);
+            const windowEnd = new Date(w.collectionEnd);
+            
+            // Show window if it overlaps with display range
+            return windowStart <= displayEnd && windowEnd >= displayStart;
+          });
 
           return (
             <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-orange-50 p-4 md:p-6">
