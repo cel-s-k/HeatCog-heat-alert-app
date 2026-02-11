@@ -319,7 +319,7 @@
             setError(null);
             
             try {
-              const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&daily=temperature_2m_max&temperature_unit=celsius&timezone=auto&past_days=3&forecast_days=16`;
+              const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&daily=temperature_2m_max&temperature_unit=celsius&timezone=auto&past_days=14&forecast_days=16`;
               
               const response = await fetch(url);
 
@@ -390,17 +390,21 @@
             }
 
             // NotHot data collection windows: 15-25°C, with 2 weeks (14 days) of cool period (<=27°C) before
-            for (let i = 14; i < temps.length; i++) {
+            // Start from day 0 to allow NotHot to start as early as tomorrow if 14-day cool period is already met historically
+            for (let i = 0; i < temps.length; i++) {
               // Check if current day is in NotHot range (15-25°C)
               if (temps[i] >= 15 && temps[i] <= 25) {
                 // Check if there's been 14 consecutive days of cool period (<=27°C) before this
                 let coolPeriodStart = i - 14;
                 let hasValidCoolPeriod = true;
                 
-                for (let j = coolPeriodStart; j < i; j++) {
-                  if (temps[j] > 27) {
-                    hasValidCoolPeriod = false;
-                    break;
+                // Only check cool period if we have at least 14 days before the current day
+                if (coolPeriodStart >= 0) {
+                  for (let j = coolPeriodStart; j < i; j++) {
+                    if (temps[j] > 27) {
+                      hasValidCoolPeriod = false;
+                      break;
+                    }
                   }
                 }
                 
