@@ -345,7 +345,7 @@
           const getTempColor = (temp, cutoff) => {
             if (!temp) return 'bg-gray-300';
             if (temp > cutoff) return 'bg-red-500';
-            if (temp >= 15 && temp <= 25) return 'bg-teal-800';
+            if (temp >= 15 && temp <= 25) return 'bg-teal-600';
             if (temp > cutoff - 3 && temp <= cutoff) return 'bg-yellow-300';
             if (temp < 15) return 'bg-blue-200';
             return 'bg-yellow-300';
@@ -354,7 +354,7 @@
           const getTempBorderColor = (temp, cutoff) => {
             if (!temp) return 'border-gray-300';
             if (temp > cutoff) return 'border-red-600';
-            if (temp >= 15 && temp <= 25) return 'border-teal-900';
+            if (temp >= 15 && temp <= 25) return 'border-teal-700';
             if (temp > cutoff - 3 && temp <= cutoff) return 'border-yellow-400';
             if (temp < 15) return 'border-blue-200';
             return 'border-yellow-400';
@@ -446,11 +446,18 @@
 
           const isDateInWindow = (dateStr) => {
             const windows = findDataCollectionWindows();
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(0, 0, 0, 0);
+            
             return windows.map(w => {
               const date = new Date(dateStr);
               const start = new Date(w.collectionStart);
               const end = new Date(w.collectionEnd);
-              if (date >= start && date <= end) {
+              date.setHours(0, 0, 0, 0);
+              
+              // Only show windows that start from tomorrow onwards
+              if (start >= tomorrow && date >= start && date <= end) {
                 return w.type;
               }
               return null;
@@ -626,11 +633,11 @@
                     <div className="mt-4 p-4 bg-gradient-to-r from-green-50 to-green-100 rounded-lg border-l-4 border-green-600">
                       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                         <div>
-                          <p className="text-lg font-bold text-green-900">{selectedCity.name}, {selectedCity.country}</p>
+                          <p className="text-lg font-bold text-black">{selectedCity.name}, {selectedCity.country}</p>
                           <p className="text-sm text-gray-600">Hot collection threshold: <span className="font-bold text-red-600">{selectedCity.cutoff}°C</span> | NotHot collection range: <span className="font-bold text-teal-700">15-25°C</span></p>
                         </div>
                         <div className="text-xs text-gray-600 bg-white px-3 py-1 rounded-full">
-                          🔥 Hot: 2+ days above cutoff | ❄️ NotHot: 15-25°C after 14 days ≤27°C
+                          🔥 Hot: 2+ days above cutoff | ☁️ Not-Hot: 15-25°C after 14 days ≤27°C
                         </div>
                       </div>
                     </div>
@@ -656,13 +663,13 @@
                         <div className="flex items-start gap-3">
                           <AlertCircle className="w-7 h-7 text-green-700 flex-shrink-0 mt-1 animate-pulse" />
                           <div className="flex-1">
-                            <h2 className="text-xl font-bold text-green-900 mb-4 flex items-center gap-2">
+                            <h2 className="text-xl font-bold text-black mb-4 flex items-center gap-2">
                               🚨 Active Data Collection Window{windows.length > 1 ? 's' : ''}
                             </h2>
                             <div className="grid gap-4">
                               {windows.map((window, idx) => (
                                 <div key={idx} className={`p-4 bg-white rounded-lg shadow border-l-4 ${window.type === 'Hot' ? 'border-red-500' : 'border-cyan-500'}`}>
-                                  <p className="font-bold text-gray-800 mb-3 text-lg">
+                                  <p className="font-bold text-black mb-3 text-lg">
                                     Window {idx + 1}: {window.type === 'Hot' ? '🔥 Hot data collection' : '☁️ Not-Hot data collection'}
                                   </p>
                                   <div className="grid md:grid-cols-2 gap-3 text-sm">
@@ -671,14 +678,14 @@
                                         <div className="flex items-start gap-2">
                                           <span className="text-2xl">🔥</span>
                                           <div>
-                                            <div className="font-semibold text-gray-700">Heat Trigger Days</div>
+                                            <div className="font-semibold text-black">Heat Trigger Days</div>
                                             <div className="text-gray-600">{formatDateLong(window.heatDays[0])} - {formatDateLong(window.heatDays[1])}</div>
                                           </div>
                                         </div>
                                         <div className="flex items-start gap-2">
                                           <span className="text-2xl">📊</span>
                                           <div>
-                                            <div className="font-semibold text-red-700">Collection Period</div>
+                                            <div className="font-semibold text-black">Collection Period</div>
                                             <div className="text-gray-600">{formatDateLong(window.collectionStart)} - {formatDateLong(window.collectionEnd)} ({window.collectionDays} day{window.collectionDays > 1 ? 's' : ''})</div>
                                           </div>
                                         </div>
@@ -688,14 +695,14 @@
                                         <div className="flex items-start gap-2">
                                           <span className="text-2xl">☁️</span>
                                           <div>
-                                            <div className="font-semibold text-gray-700">Not-Hot Period</div>
+                                            <div className="font-semibold text-black">Not-Hot Period</div>
                                             <div className="text-gray-600">{formatDateLong(window.coolPeriodStart)} - {formatDateLong(window.coolPeriodEnd)} (≤27°C for 14 days)</div>
                                           </div>
                                         </div>
                                         <div className="flex items-start gap-2">
                                           <span className="text-2xl">📊</span>
                                           <div>
-                                            <div className="font-semibold text-cyan-700">Collection Period</div>
+                                            <div className="font-semibold text-black">Collection Period</div>
                                             <div className="text-gray-600">{formatDateLong(window.collectionStart)} - {formatDateLong(window.collectionEnd)} ({window.collectionDays} day{window.collectionDays > 1 ? 's' : ''})</div>
                                           </div>
                                         </div>
@@ -721,7 +728,7 @@
                           <span>Cold (below 15°C)</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <div className="w-4 h-4 bg-teal-800 rounded"></div>
+                          <div className="w-4 h-4 bg-teal-600 rounded"></div>
                           <span>Not-Hot Range (15-25°C)</span>
                         </div>
                         <div className="flex items-center gap-2">
@@ -775,8 +782,8 @@
                                   key={day.date}
                                   className={`aspect-square border-2 rounded-lg p-1 md:p-2 transition-all relative flex flex-col items-center justify-center ${
                                     noDataAvailable ? 'border-gray-400 bg-gray-100' : getTempBorderColor(temp, cutoff)
-                                  } ${collectionTypes.length > 0 && collectionTypes.includes('Hot') ? 'ring-4 ring-orange-400 shadow-lg' : ''} ${collectionTypes.length > 0 && collectionTypes.includes('NotHot') ? 'ring-4 ring-teal-800 shadow-lg' : ''} ${
-                                    today ? 'ring-4 ring-green-600 shadow-lg' : ''
+                                  } ${collectionTypes.length > 0 && collectionTypes.includes('Hot') ? 'ring-4 ring-orange-400 shadow-lg' : ''} ${collectionTypes.length > 0 && collectionTypes.includes('NotHot') ? 'ring-4 ring-teal-600 shadow-lg' : ''} ${
+                                    today ? 'ring-4 ring-black shadow-lg' : ''
                                   } ${noDataAvailable ? 'opacity-40' : ''}`}
                                 >
                                   <div className="absolute top-0.5 right-0.5 text-[7px] md:text-[8px] font-semibold text-gray-600">
