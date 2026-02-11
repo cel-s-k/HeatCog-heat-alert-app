@@ -369,8 +369,10 @@
             const windows = [];
 
             // Hot data collection windows: 2 consecutive days > cutoff
-            // Start from i=1 to allow collection to start tomorrow if hot period triggered in the past
-            for (let i = 1; i < temps.length - 2; i++) {
+            // Collection starts the day AFTER the 2-day heat trigger ends
+            // We detect all triggers across the full 30-day dataset;
+            // downstream filters restrict display to tomorrow onwards
+            for (let i = 0; i < temps.length - 2; i++) {
               if (temps[i] > cutoff && temps[i + 1] > cutoff) {
                 let windowStart = i + 2;
                 let windowEnd = windowStart;
@@ -392,17 +394,15 @@
               }
             }
 
-            // NotHot data collection windows: 15-25°C, with 2 weeks (14 days) of cool period (<=27°C) before
-            // Start from day 0 to allow NotHot to start as early as tomorrow if 14-day cool period is already met historically
+            // NotHot data collection windows: 15-25°C, with 14 days of cool period (<=27°C) before
             for (let i = 0; i < temps.length; i++) {
-              // Check if current day is in NotHot range (15-25°C)
               if (temps[i] >= 15 && temps[i] <= 25) {
-                // Check if there's been 14 consecutive days of cool period (<=27°C) before this
                 let coolPeriodStart = i - 14;
-                let hasValidCoolPeriod = true;
+                let hasValidCoolPeriod = false;
                 
-                // Only check cool period if we have at least 14 days before the current day
+                // Only valid if we have a full 14-day lookback available
                 if (coolPeriodStart >= 0) {
+                  hasValidCoolPeriod = true;
                   for (let j = coolPeriodStart; j < i; j++) {
                     if (temps[j] > 27) {
                       hasValidCoolPeriod = false;
@@ -412,7 +412,6 @@
                 }
                 
                 if (hasValidCoolPeriod) {
-                  // Find the continuous window of NotHot days
                   let windowStart = i;
                   let windowEnd = i;
                   
@@ -420,7 +419,6 @@
                     windowEnd++;
                   }
                   
-                  // Check if already part of a Hot window, if so skip
                   const isInHotWindow = windows.some(w => 
                     w.type === 'Hot' && new Date(dates[windowStart]) >= new Date(w.collectionStart) && 
                     new Date(dates[windowStart]) <= new Date(w.collectionEnd)
@@ -445,19 +443,21 @@
           };
 
           const isDateInWindow = (dateStr) => {
-            const windows = findDataCollectionWindows();
+            const allWin = findDataCollectionWindows();
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
             tomorrow.setHours(0, 0, 0, 0);
             
-            return windows.map(w => {
+            return allWin.map(w => {
               const date = new Date(dateStr);
               const start = new Date(w.collectionStart);
               const end = new Date(w.collectionEnd);
               date.setHours(0, 0, 0, 0);
+              start.setHours(0, 0, 0, 0);
+              end.setHours(0, 0, 0, 0);
               
-              // Only show windows that start from tomorrow onwards
-              if (start >= tomorrow && date >= start && date <= end) {
+              // Date must be tomorrow or later, AND within the window
+              if (date >= tomorrow && date >= start && date <= end) {
                 return w.type;
               }
               return null;
@@ -580,9 +580,9 @@
             tomorrow.setDate(tomorrow.getDate() + 1);
             tomorrow.setHours(0, 0, 0, 0);
             
-            // Only show windows that start from tomorrow onwards (not past or today)
-            // And overlap with display range
-            return windowStart <= displayEnd && windowEnd >= displayStart && windowStart >= tomorrow;
+            // Show windows that have at least one day from tomorrow onwards
+            // AND overlap with the displayed calendar range
+            return windowEnd >= tomorrow && windowStart <= displayEnd && windowEnd >= displayStart;
           });
 
           return (
@@ -763,10 +763,20 @@
 
                               const temp = day.temp;
                               const today = isToday(day.date);
-                              const collectionTypes = isDateInWindow(day.date);
                               const cutoff = selectedCity.cutoff;
                               const noDataAvailable = temp === null;
-                              const noDataCollection = collectionTypes.length === 0 && !noDataAvailable;
+                              
+                              // Determine if this day is tomorrow or later
+                              const dayDate = new Date(day.date);
+                              dayDate.setHours(0, 0, 0, 0);
+                              const tomorrowDate = new Date();
+                              tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+                              tomorrowDate.setHours(0, 0, 0, 0);
+                              const isFuture = dayDate >= tomorrowDate;
+                              
+                              // Only check collection windows for future days
+                              const collectionTypes = isFuture ? isDateInWindow(day.date) : [];
+                              const noDataCollection = isFuture && collectionTypes.length === 0 && !noDataAvailable;
 
                               const formatDateAbbrev = (dateStr) => {
                                 const date = new Date(dateStr);
