@@ -631,13 +631,17 @@
 
                   {selectedCity && (
                     <div className="mt-4 p-4 bg-gradient-to-r from-green-50 to-green-100 rounded-lg border-l-4 border-green-600">
-                      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                      <div className="flex flex-col gap-3">
                         <div>
                           <p className="text-lg font-bold text-black">{selectedCity.name}, {selectedCity.country}</p>
-                          <p className="text-sm text-gray-600">Hot collection threshold: <span className="font-bold text-red-600">{selectedCity.cutoff}°C</span> | NotHot collection range: <span className="font-bold text-teal-700">15-25°C</span></p>
                         </div>
-                        <div className="text-xs text-gray-600 bg-white px-3 py-1 rounded-full">
-                          🔥 Hot: 2+ days above cutoff | ☁️ Not-Hot: 15-25°C after 14 days ≤27°C
+                        <div className="bg-white rounded-lg p-3 border-l-4 border-orange-500">
+                          <p className="text-sm font-semibold text-black mb-2">🔥 HOT Data Collection:</p>
+                          <p className="text-xs text-gray-700">When 2+ consecutive days exceed <span className="font-bold text-red-600">{selectedCity.cutoff}°C</span>, data collection starts the day after the trigger ends and continues while temperatures stay above cutoff.</p>
+                        </div>
+                        <div className="bg-white rounded-lg p-3 border-l-4 border-teal-600">
+                          <p className="text-sm font-semibold text-black mb-2">☁️ NOT-HOT Data Collection:</p>
+                          <p className="text-xs text-gray-700">When temperatures are in the <span className="font-bold text-teal-700">15-25°C range</span>, data collection occurs if preceded by 14+ consecutive cool days (≤27°C). Collection includes all consecutive days in the 15-25°C range.</p>
                         </div>
                       </div>
                     </div>
@@ -659,20 +663,29 @@
                 {weatherData && selectedCity && !loading && (
                   <>
                     {windows.length > 0 && (
-                      <div className="mb-6">
-                        <h2 className="text-xl font-bold text-black mb-4">🚨 Active Data Collection Window{windows.length > 1 ? 's' : ''}</h2>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                          {windows.map((window, idx) => (
-                            <div key={idx} className={`p-3 bg-white rounded-lg shadow border-l-4 ${window.type === 'Hot' ? 'border-red-500' : 'border-cyan-500'}`}>
-                              <p className="font-bold text-black mb-2 text-sm">
-                                {window.type === 'Hot' ? '🔥 Hot' : '☁️ Not-Hot'}
-                              </p>
-                              <div className="text-xs text-gray-700">
-                                <div className="font-semibold text-black mb-1">{formatDateLong(window.collectionStart)} - {formatDateLong(window.collectionEnd)}</div>
-                                <div className="text-gray-600">{window.collectionDays} day{window.collectionDays > 1 ? 's' : ''}</div>
-                              </div>
+                      <div className="bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-400 rounded-xl p-4 md:p-6 mb-6 shadow-lg">
+                        <div className="flex items-start gap-3">
+                          <AlertCircle className="w-7 h-7 text-green-700 flex-shrink-0 mt-1 animate-pulse" />
+                          <div className="flex-1">
+                            <h2 className="text-xl font-bold text-black mb-4 flex items-center gap-2">
+                              🚨 Active Data Collection Window{windows.length > 1 ? 's' : ''}
+                            </h2>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                              {windows.map((window, idx) => (
+                                <div key={idx} className={`p-3 bg-white rounded-lg shadow border-l-4 flex items-start gap-2 ${window.type === 'Hot' ? 'border-red-500' : 'border-cyan-500'}`}>
+                                  <div className="text-2xl flex-shrink-0 mt-1">
+                                    {window.type === 'Hot' ? '🔥' : '☁️'}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-xs font-semibold text-gray-600 mb-1">📊 Collection Period</div>
+                                    <div className="font-semibold text-black text-sm">{formatDateLong(window.collectionStart)}</div>
+                                    <div className="text-xs text-gray-600">to {formatDateLong(window.collectionEnd)}</div>
+                                    <div className="text-xs text-gray-500 mt-1">({window.collectionDays} day{window.collectionDays > 1 ? 's' : ''})</div>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
-                          ))}
+                          </div>
                         </div>
                       </div>
                     )}
@@ -682,31 +695,42 @@
                         15-Day Temperature Forecast
                       </h2>
 
-                      <div className="mb-6 flex flex-wrap gap-4 text-xs md:text-sm">
-                        <div className="flex items-center gap-2">
-                          <div className="w-4 h-4 bg-blue-200 rounded"></div>
-                          <span>Cold (below 15°C), NO data collection</span>
+                      <div className="mb-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs md:text-sm">
+                        <div className="flex items-start gap-2">
+                          <div className="w-4 h-4 bg-blue-200 rounded flex-shrink-0 mt-0.5"></div>
+                          <div>
+                            <div className="font-semibold text-gray-800">Cold (below 15°C)</div>
+                            <div className="text-gray-600">NO data collection</div>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-4 h-4 bg-teal-600 rounded"></div>
-                          <span>Not-Hot Range (15-25°C), collect Not-Hot data</span>
+                        <div className="flex items-start gap-2">
+                          <div className="w-4 h-4 bg-teal-600 rounded flex-shrink-0 mt-0.5"></div>
+                          <div>
+                            <div className="font-semibold text-gray-800">Not-Hot Range (15-25°C)</div>
+                            <div className="text-gray-600">Collect Not-Hot data</div>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-4 h-4 bg-yellow-300 rounded"></div>
-                          <span>Warm (25-{selectedCity.cutoff}°C), NO data collection</span>
+                        <div className="flex items-start gap-2">
+                          <div className="w-4 h-4 bg-yellow-300 rounded flex-shrink-0 mt-0.5"></div>
+                          <div>
+                            <div className="font-semibold text-gray-800">Warm (25-{selectedCity.cutoff}°C)</div>
+                            <div className="text-gray-600">NO data collection</div>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-4 h-4 bg-red-500 rounded"></div>
-                          <span>Hot (above {selectedCity.cutoff}°C), collect Hot data</span>
+                        <div className="flex items-start gap-2">
+                          <div className="w-4 h-4 bg-red-500 rounded flex-shrink-0 mt-0.5"></div>
+                          <div>
+                            <div className="font-semibold text-gray-800">Hot (above {selectedCity.cutoff}°C)</div>
+                            <div className="text-gray-600">Collect Hot data</div>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-4 h-4 bg-gray-300 rounded"></div>
-                          <span>No data available</span>
+                        <div className="flex items-start gap-2">
+                          <div className="w-4 h-4 bg-gray-300 rounded flex-shrink-0 mt-0.5"></div>
+                          <div>
+                            <div className="font-semibold text-gray-800">No data available</div>
+                            <div className="text-gray-600">Unable to determine</div>
+                          </div>
                         </div>
-                      </div>
-
-                      <div className="mb-6 text-center">
-                        <p className="text-sm font-bold text-black">🔥 Hot: 2+ days above {selectedCity.cutoff}°C | ☁️ Not-Hot: 15-25°C after 14 days ≤27°C</p>
                       </div>
 
                       <div className="space-y-4">
@@ -730,28 +754,9 @@
                               const cutoff = selectedCity.cutoff;
                               const noDataAvailable = temp === null;
                               
-                              // Determine if this day is tomorrow or later
-                              const dayDate = new Date(day.date);
-                              dayDate.setHours(0, 0, 0, 0);
-                              const tomorrowDate = new Date();
-                              tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-                              tomorrowDate.setHours(0, 0, 0, 0);
-                              const isFuture = dayDate >= tomorrowDate;
-                              
-                              // Check collection windows for future days only
-                              const collectionTypes = isFuture ? isDateInWindow(day.date) : [];
-                              const noDataCollection = isFuture && collectionTypes.length === 0 && !noDataAvailable;
-                              
-                              // Determine label for all days based on temperature range
-                              const getTemperatureLabel = () => {
-                                if (noDataAvailable) return null;
-                                if (temp > cutoff) return 'Hot';
-                                if (temp >= 15 && temp <= 25) return 'Not-Hot';
-                                if (temp > cutoff - 3 && temp <= cutoff) return 'Warm';
-                                if (temp < 15) return 'Cold';
-                                return 'Warm';
-                              };
-                              const temperatureLabel = getTemperatureLabel();
+                              // Check collection windows for all days (past, today, and future)
+                              const collectionTypes = isDateInWindow(day.date);
+                              const noDataCollection = collectionTypes.length === 0 && !noDataAvailable;
 
                               const formatDateAbbrev = (dateStr) => {
                                 const date = new Date(dateStr);
@@ -788,23 +793,17 @@
                                   
                                   {!noDataAvailable && (
                                     <div className="text-[8px] md:text-[10px] font-bold text-center leading-tight px-0.5">
-                                      {isFuture ? (
-                                        <>
-                                          {collectionTypes.length > 0 && collectionTypes.includes('Hot') && (
-                                            <div className="text-red-700">collect<br/>Hot data</div>
-                                          )}
-                                          {collectionTypes.length > 0 && collectionTypes.includes('NotHot') && (
-                                            <div className="text-teal-700">collect<br/>Not-Hot data</div>
-                                          )}
-                                          {noDataCollection && (
-                                            <div className="flex flex-col items-center">
-                                              <div className="text-gray-700">NO data<br/>collection</div>
-                                              <div className="text-2xl font-bold text-black">✕</div>
-                                            </div>
-                                          )}
-                                        </>
-                                      ) : (
-                                        <div className="text-gray-600">{temperatureLabel}</div>
+                                      {collectionTypes.length > 0 && collectionTypes.includes('Hot') && (
+                                        <div className="text-red-700">collect<br/>Hot data</div>
+                                      )}
+                                      {collectionTypes.length > 0 && collectionTypes.includes('NotHot') && (
+                                        <div className="text-teal-700 text-[9px] md:text-[11px] font-bold">collect<br/>Not-Hot data</div>
+                                      )}
+                                      {noDataCollection && (
+                                        <div className="flex flex-col items-center">
+                                          <div className="text-gray-700">NO data<br/>collection</div>
+                                          <div className="text-2xl font-bold text-black">✕</div>
+                                        </div>
                                       )}
                                     </div>
                                   )}
