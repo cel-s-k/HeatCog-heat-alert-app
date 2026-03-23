@@ -394,22 +394,29 @@
               }
             }
 
-            // NotHot data collection windows: 15-25°C, with 14 days of cool period (<=27°C) before
-            for (let i = 0; i < temps.length; i++) {
-              if (temps[i] >= 15 && temps[i] <= 25) {
-                let coolPeriodStart = i - 14;
-                let hasValidCoolPeriod = false;
-                
-                // Only valid if we have a full 14-day lookback available
-                if (coolPeriodStart >= 0) {
-                  hasValidCoolPeriod = true;
-                  for (let j = coolPeriodStart; j < i; j++) {
-                    if (temps[j] > 27) {
-                      hasValidCoolPeriod = false;
-                      break;
-                    }
-                  }
-                }
+// NotHot data collection windows: 15-25°C, with variable washout after heat spikes >27°C:
+// 1-day spike = 2-day washout, 2-day spike = 4-day washout, 3+ day spike = 7-day washout
+for (let i = 0; i < temps.length; i++) {
+  if (temps[i] >= 15 && temps[i] <= 25) {
+    // Find the most recent heat spike (>27°C) before day i
+    // and determine required washout length
+    let requiredWashout = 0;
+    let j = i - 1;
+    while (j >= 0 && temps[j] <= 27) j--;
+    // j is now the last day of the most recent spike (or -1 if none)
+    if (j >= 0) {
+      // Count the spike length
+      let spikeEnd = j;
+      let spikeStart = j;
+      while (spikeStart > 0 && temps[spikeStart - 1] > 27) spikeStart--;
+      const spikeLength = spikeEnd - spikeStart + 1;
+      requiredWashout = spikeLength === 1 ? 2 : spikeLength === 2 ? 4 : 7;
+    }
+    // Check that enough washout days have passed since the spike ended
+    const daysSinceSpike = j >= 0 ? (i - j - 1) : i;
+    let hasValidCoolPeriod = requiredWashout === 0
+      ? true
+      : daysSinceSpike >= requiredWashout;
                 
                 if (hasValidCoolPeriod) {
                   let windowStart = i;
@@ -637,7 +644,7 @@
                           <p className="text-sm text-gray-600">Hot collection threshold: <span className="font-bold text-red-600">{selectedCity.cutoff}°C</span> | NotHot collection range: <span className="font-bold text-teal-700">15-25°C</span></p>
                         </div>
                         <div className="text-xs font-bold text-gray-900 bg-white px-3 py-1 rounded-full border border-gray-300">
-                          🔥 Hot: 2+ days above cutoff &nbsp;|&nbsp; ☁️ Not-Hot: 15–25°C after 14 days ≤27°C
+                          🔥 Hot: 2+ days above cutoff &nbsp;|&nbsp; ☁️ Not-Hot: 15–25°C after washout (1/2/3+ day ≤27°C -> 2/4/7 days washout)
                         </div>
                       </div>
                     </div>
