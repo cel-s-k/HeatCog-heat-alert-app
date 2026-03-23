@@ -302,6 +302,27 @@
           </svg>
         );
 
+        // Given the temps array and a candidate day index i, find the most recent
+        // contiguous spike of days > 27°C that ended before day i, and return the
+        // required washout length (0 if no spike exists in the dataset).
+        const getRequiredWashout = (temps, i) => {
+          // Walk backwards from i-1 to find the last hot day
+          let spikeEnd = -1;
+          for (let j = i - 1; j >= 0; j--) {
+            if (temps[j] > 27) { spikeEnd = j; break; }
+          }
+          if (spikeEnd === -1) return 0; // no prior spike at all
+
+          // Count how many consecutive hot days end at spikeEnd
+          let spikeStart = spikeEnd;
+          while (spikeStart > 0 && temps[spikeStart - 1] > 27) spikeStart--;
+          const spikeLength = spikeEnd - spikeStart + 1;
+
+          if (spikeLength === 1) return 2;
+          if (spikeLength === 2) return 4;
+          return 7; // 3+ days
+        };
+
         const HeatMonitorDashboard = () => {
           const [selectedCity, setSelectedCity] = useState(null);
           const [searchTerm, setSearchTerm] = useState('');
@@ -317,16 +338,10 @@
           const fetchWeatherData = async (city) => {
             setLoading(true);
             setError(null);
-            
             try {
               const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&daily=temperature_2m_max&temperature_unit=celsius&timezone=auto&past_days=14&forecast_days=16`;
-              
               const response = await fetch(url);
-
-              if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-              }
-
+              if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
               const data = await response.json();
               setWeatherData(data);
             } catch (err) {
@@ -368,107 +383,80 @@
             const cutoff = selectedCity.cutoff;
             const windows = [];
 
-            // Hot data collection windows: 2 consecutive days > cutoff
-            // Collection starts the day AFTER the 2-day heat trigger ends
-            // We detect all triggers across the full 30-day dataset;
-            // downstream filters restrict display to tomorrow onwards
-            for (let i = 0; i < temps.length - 2; i++) {
+            // ── HOT windows ──────────────────────────────────────────────────────────
+            // Trigger: 2 consecutive days > cutoff.
+            // Collection window = those same 2 trigger days PLUS any additional
+            // consecutive days that are also > cutoff.
+            for (let i = 0; i < temps.length - 1; i++) {
               if (temps[i] > cutoff && temps[i + 1] > cutoff) {
-                let windowStart = i + 2;
-                let windowEnd = windowStart;
-                
-                while (windowEnd < temps.length && temps[windowEnd] > cutoff) {
+                // Extend to cover all consecutive hot days from i onwards
+                let windowEnd = i + 1;
+                while (windowEnd + 1 < temps.length && temps[windowEnd + 1] > cutoff) {
                   windowEnd++;
                 }
-                
-                if (windowEnd > windowStart) {
-                  windows.push({
-                    type: 'Hot',
-                    heatDays: [dates[i], dates[i + 1]],
-                    collectionStart: dates[windowStart],
-                    collectionEnd: dates[windowEnd - 1],
-                    collectionDays: windowEnd - windowStart
-                  });
-                  i = windowEnd - 1;
-                }
+                windows.push({
+                  type: 'Hot',
+                  collectionStart: dates[i],
+                  collectionEnd: dates[windowEnd],
+                  collectionDays: windowEnd - i + 1
+                });
+                i = windowEnd; // skip to end of this hot run
               }
             }
 
-// NotHot data collection windows: 15-25°C, with variable washout after heat spikes >27°C:
-// 1-day spike = 2-day washout, 2-day spike = 4-day washout, 3+ day spike = 7-day washout
-for (let i = 0; i < temps.length; i++) {
-  if (temps[i] >= 15 && temps[i] <= 25) {
-    // Find the most recent heat spike (>27°C) before day i
-    // and determine required washout length
-    let requiredWashout = 0;
-    let j = i - 1;
-    while (j >= 0 && temps[j] <= 27) j--;
-    // j is now the last day of the most recent spike (or -1 if none)
-    if (j >= 0) {
-      // Count the spike length
-      let spikeEnd = j;
-      let spikeStart = j;
-      while (spikeStart > 0 && temps[spikeStart - 1] > 27) spikeStart--;
-      const spikeLength = spikeEnd - spikeStart + 1;
-      requiredWashout = spikeLength === 1 ? 2 : spikeLength === 2 ? 4 : 7;
-    }
-    // Check that enough washout days have passed since the spike ended
-    const daysSinceSpike = j >= 0 ? (i - j - 1) : i;
-    let hasValidCoolPeriod = requiredWashout === 0
-      ? true
-      : daysSinceSpike >= requiredWashout;
-                
+            // ── NOT-HOT windows ───────────────────────────────────────────────────────
+            // Trigger: temp 15–25°C, but only after the required washout has elapsed
+            // since the most recent spike above 27°C.
+            // Washout rule: 1-day spike → 2 days; 2-day spike → 4 days; 3+ days → 7 days.
+            // If there has never been a spike, no washout is required.
+            for (let i = 0; i < temps.length; i++) {
+              if (temps[i] >= 15 && temps[i] <= 25) {
+                const requiredWashout = getRequiredWashout(temps, i);
+
+                let hasValidCoolPeriod = false;
+
+                if (requiredWashout === 0) {
+                  // No spike ever occurred — always valid
+                  hasValidCoolPeriod = true;
+                } else {
+                  // Find end index of the most recent spike before day i
+                  let spikeEnd = -1;
+                  for (let j = i - 1; j >= 0; j--) {
+                    if (temps[j] > 27) { spikeEnd = j; break; }
+                  }
+                  // Days that have elapsed since the spike ended (exclusive of spike day)
+                  const daysSinceSpike = i - spikeEnd - 1;
+                  hasValidCoolPeriod = daysSinceSpike >= requiredWashout;
+                }
+
                 if (hasValidCoolPeriod) {
-                  let windowStart = i;
+                  // Extend the NotHot window as long as temps stay 15–25°C
                   let windowEnd = i;
-                  
-                  while (windowEnd < temps.length && temps[windowEnd] >= 15 && temps[windowEnd] <= 25) {
+                  while (windowEnd + 1 < temps.length && temps[windowEnd + 1] >= 15 && temps[windowEnd + 1] <= 25) {
                     windowEnd++;
                   }
-                  
-                  const isInHotWindow = windows.some(w => 
-                    w.type === 'Hot' && new Date(dates[windowStart]) >= new Date(w.collectionStart) && 
-                    new Date(dates[windowStart]) <= new Date(w.collectionEnd)
+
+                  // Don't overlap with an existing Hot window
+                  const isInHotWindow = windows.some(w =>
+                    w.type === 'Hot' &&
+                    new Date(dates[i]) >= new Date(w.collectionStart) &&
+                    new Date(dates[i]) <= new Date(w.collectionEnd)
                   );
-                  
-                  if (!isInHotWindow && windowEnd > windowStart) {
+
+                  if (!isInHotWindow) {
                     windows.push({
                       type: 'NotHot',
-                      coolPeriodStart: dates[coolPeriodStart],
-                      coolPeriodEnd: dates[i - 1],
-                      collectionStart: dates[windowStart],
-                      collectionEnd: dates[windowEnd - 1],
-                      collectionDays: windowEnd - windowStart
+                      collectionStart: dates[i],
+                      collectionEnd: dates[windowEnd],
+                      collectionDays: windowEnd - i + 1
                     });
-                    i = windowEnd - 1;
+                    i = windowEnd; // skip to end of this NotHot run
                   }
                 }
               }
             }
 
             return windows.sort((a, b) => new Date(a.collectionStart) - new Date(b.collectionStart));
-          };
-
-          const isDateInWindow = (dateStr) => {
-            const allWin = findDataCollectionWindows();
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            tomorrow.setHours(0, 0, 0, 0);
-            
-            return allWin.map(w => {
-              const date = new Date(dateStr);
-              const start = new Date(w.collectionStart);
-              const end = new Date(w.collectionEnd);
-              date.setHours(0, 0, 0, 0);
-              start.setHours(0, 0, 0, 0);
-              end.setHours(0, 0, 0, 0);
-              
-              // Date must be tomorrow or later, AND within the window
-              if (date >= tomorrow && date >= start && date <= end) {
-                return w.type;
-              }
-              return null;
-            }).filter(t => t !== null);
           };
 
           const isToday = (dateStr) => {
@@ -480,91 +468,49 @@ for (let i = 0; i < temps.length; i++) {
             return dateOnly.getTime() === today.getTime();
           };
 
-          const isTooOld = (dateStr) => {
-            const date = new Date(dateStr);
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const threeDaysAgo = new Date(today);
-            threeDaysAgo.setDate(today.getDate() - 3);
-            return date < threeDaysAgo;
-          };
-
-          const formatDateShort = (dateStr) => {
-            const date = new Date(dateStr);
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const dateOnly = new Date(date);
-            dateOnly.setHours(0, 0, 0, 0);
-
-            if (dateOnly.getTime() === today.getTime()) return 'Today';
-            
-            const tomorrow = new Date(today);
-            tomorrow.setDate(today.getDate() + 1);
-            if (dateOnly.getTime() === tomorrow.getTime()) return 'Tomorrow';
-
-            return date.toLocaleDateString('en-US', { weekday: 'short' });
-          };
-
           const formatDateLong = (dateStr) => {
             const date = new Date(dateStr);
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
               'July', 'August', 'September', 'October', 'November', 'December'];
-            const month = monthNames[date.getMonth()];
-            const day = date.getDate();
-            return `${month} ${day}`;
+            return `${monthNames[date.getMonth()]} ${date.getDate()}`;
           };
 
           const organizeByWeeks = () => {
             if (!weatherData) return [];
-            
-            // Display only last 3 days of past + 16 days forecast (19 days total)
-            // But keep all 30 days internally for calculations
-            const weeks = [];
             const startIdx = Math.max(0, weatherData.daily.time.length - 19);
             const displayDays = [];
-            
+
             weatherData.daily.time.forEach((date, idx) => {
-              // Only display from startIdx onwards
               if (idx < startIdx) return;
-              
               const d = new Date(date);
               const dayOfWeek = d.getDay();
               const adjustedDay = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-              
               displayDays.push({
                 date,
                 temp: weatherData.daily.temperature_2m_max[idx],
                 dayOfWeek: adjustedDay
               });
             });
-            
-            // Organize into weeks starting from Monday (0 = Monday in adjustedDay)
+
+            const weeks = [];
             let currentWeek = [];
-            
-            // Add padding at start if needed
-            const firstDay = displayDays[0];
-            const startingDayOfWeek = firstDay.dayOfWeek;
-            for (let i = 0; i < startingDayOfWeek; i++) {
-              currentWeek.push(null);
-            }
-            
-            // Add all display days
+            const startingDayOfWeek = displayDays[0].dayOfWeek;
+            for (let i = 0; i < startingDayOfWeek; i++) currentWeek.push(null);
+
             displayDays.forEach((day, idx) => {
               currentWeek.push(day);
-              
               if (day.dayOfWeek === 6 || idx === displayDays.length - 1) {
                 weeks.push([...currentWeek]);
                 currentWeek = [];
               }
             });
-            
+
             return weeks;
           };
 
           const allWindows = weatherData && selectedCity ? findDataCollectionWindows() : [];
           const weeks = organizeByWeeks();
 
-          // Filter windows to only show those that overlap with the displayed calendar range
           const getDisplayStartDate = () => {
             if (!weatherData) return null;
             const startIdx = Math.max(0, weatherData.daily.time.length - 19);
@@ -580,15 +526,11 @@ for (let i = 0; i < temps.length; i++) {
             const displayStart = getDisplayStartDate();
             const displayEnd = getDisplayEndDate();
             if (!displayStart || !displayEnd) return false;
-            
             const windowStart = new Date(w.collectionStart);
             const windowEnd = new Date(w.collectionEnd);
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
             tomorrow.setHours(0, 0, 0, 0);
-            
-            // Show windows that have at least one day from tomorrow onwards
-            // AND overlap with the displayed calendar range
             return windowEnd >= tomorrow && windowStart <= displayEnd && windowEnd >= displayStart;
           });
 
@@ -641,10 +583,10 @@ for (let i = 0; i < temps.length; i++) {
                       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                         <div>
                           <p className="text-lg font-bold text-black">{selectedCity.name}, {selectedCity.country}</p>
-                          <p className="text-sm text-gray-600">Hot collection threshold: <span className="font-bold text-red-600">{selectedCity.cutoff}°C</span> | NotHot collection range: <span className="font-bold text-teal-700">15-25°C</span></p>
+                          <p className="text-sm text-gray-600">Hot collection threshold: <span className="font-bold text-red-600">{selectedCity.cutoff}°C</span> | NotHot collection range: <span className="font-bold text-teal-700">15–25°C</span></p>
                         </div>
                         <div className="text-xs font-bold text-gray-900 bg-white px-3 py-1 rounded-full border border-gray-300">
-                          🔥 Hot: 2+ days above cutoff &nbsp;|&nbsp; ☁️ Not-Hot: 15–25°C after washout (1/2/3+ day ≤27°C -> 2/4/7 days washout)
+                          🔥 Hot: 2+ days above cutoff &nbsp;|&nbsp; ☁️ Not-Hot: 15–25°C after washout (1/2/3+ day spike →  2/4/7 days)
                         </div>
                       </div>
                     </div>
@@ -740,28 +682,24 @@ for (let i = 0; i < temps.length; i++) {
                               const today = isToday(day.date);
                               const cutoff = selectedCity.cutoff;
                               const noDataAvailable = temp === null;
-                              
-                              // Determine if this day is tomorrow or later
+
                               const dayDate = new Date(day.date);
                               dayDate.setHours(0, 0, 0, 0);
                               const tomorrowDate = new Date();
                               tomorrowDate.setDate(tomorrowDate.getDate() + 1);
                               tomorrowDate.setHours(0, 0, 0, 0);
                               const isFuture = dayDate >= tomorrowDate;
-                              
-                              // Check collection windows for ALL days (past, today, future)
-                              // isDateInWindow still only returns types for tomorrow+ days;
-                              // for past/today we need a separate check without the tomorrow gate
+
                               const collectionTypesForLabels = (() => {
                                 const allWin = findDataCollectionWindows();
                                 return allWin.map(w => {
-                                  const d = new Date(day.date); d.setHours(0,0,0,0);
-                                  const s = new Date(w.collectionStart); s.setHours(0,0,0,0);
-                                  const e = new Date(w.collectionEnd); e.setHours(0,0,0,0);
+                                  const d = new Date(day.date); d.setHours(0, 0, 0, 0);
+                                  const s = new Date(w.collectionStart); s.setHours(0, 0, 0, 0);
+                                  const e = new Date(w.collectionEnd); e.setHours(0, 0, 0, 0);
                                   return (d >= s && d <= e) ? w.type : null;
                                 }).filter(t => t !== null);
                               })();
-                              // Rings only on future days (tomorrow+)
+
                               const collectionTypes = isFuture ? collectionTypesForLabels : [];
                               const noDataCollection = collectionTypesForLabels.length === 0 && !noDataAvailable;
 
@@ -769,41 +707,40 @@ for (let i = 0; i < temps.length; i++) {
                                 const date = new Date(dateStr);
                                 const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                                   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                                const month = monthNames[date.getMonth()];
-                                const day = date.getDate();
-                                return `${month} ${day}`;
+                                return `${monthNames[date.getMonth()]} ${date.getDate()}`;
                               };
 
                               return (
                                 <div
                                   key={day.date}
-                                  className={`aspect-square border-2 rounded-lg p-1 md:p-2 transition-all relative flex flex-col items-center justify-center ${
-                                    noDataAvailable ? 'border-gray-400 bg-gray-100' : getTempBorderColor(temp, cutoff)
-                                  } ${collectionTypes.length > 0 && collectionTypes.includes('Hot') ? 'ring-4 ring-orange-400 shadow-lg' : ''} ${collectionTypes.length > 0 && collectionTypes.includes('NotHot') ? 'ring-4 ring-teal-600 shadow-lg' : ''} ${
-                                    today ? 'ring-4 ring-black shadow-lg' : ''
-                                  } ${noDataAvailable ? 'opacity-40' : ''}`}
+                                  className={`aspect-square border-2 rounded-lg p-1 md:p-2 transition-all relative flex flex-col items-center justify-center
+                                    ${noDataAvailable ? 'border-gray-400 bg-gray-100' : getTempBorderColor(temp, cutoff)}
+                                    ${collectionTypes.includes('Hot') ? 'ring-4 ring-orange-400 shadow-lg' : ''}
+                                    ${collectionTypes.includes('NotHot') ? 'ring-4 ring-teal-600 shadow-lg' : ''}
+                                    ${today ? 'ring-4 ring-black shadow-lg' : ''}
+                                    ${noDataAvailable ? 'opacity-40' : ''}`}
                                 >
                                   <div className="absolute top-0.5 right-0.5 text-[7px] md:text-[8px] font-semibold text-gray-600">
                                     {formatDateAbbrev(day.date)}
                                   </div>
-                                  
+
                                   {noDataAvailable ? (
                                     <div className="text-gray-400 text-[6px] md:text-[7px]">No data<br/>available</div>
                                   ) : (
                                     <>
                                       <div className={`w-2 h-2 md:w-3 md:h-3 rounded-full mb-1 ${getTempColor(temp, cutoff)}`}></div>
                                       <div className="text-[11px] md:text-[12px] font-bold text-gray-800 mb-1">
-                                        {temp ? temp.toFixed(1) : '--'}°
+                                        {temp != null ? temp.toFixed(1) : '--'}°
                                       </div>
                                     </>
                                   )}
-                                  
+
                                   {!noDataAvailable && (
                                     <div className="text-[8px] md:text-[10px] font-bold text-center leading-tight px-0.5">
-                                      {collectionTypesForLabels.length > 0 && collectionTypesForLabels.includes('Hot') && (
+                                      {collectionTypesForLabels.includes('Hot') && (
                                         <div className="text-red-700">collect<br/>Hot data</div>
                                       )}
-                                      {collectionTypesForLabels.length > 0 && collectionTypesForLabels.includes('NotHot') && (
+                                      {collectionTypesForLabels.includes('NotHot') && (
                                         <div className="text-teal-700 text-[9px] md:text-[11px] font-bold">collect<br/>Not-Hot data</div>
                                       )}
                                       {noDataCollection && (
@@ -814,7 +751,7 @@ for (let i = 0; i < temps.length; i++) {
                                       )}
                                     </div>
                                   )}
-                                  
+
                                   {today && (
                                     <div className="absolute -top-1 -right-1 bg-green-600 text-white text-[8px] md:text-[10px] font-bold px-1 md:px-2 py-0.5 rounded-full shadow">
                                       TODAY
@@ -847,5 +784,3 @@ for (let i = 0; i < temps.length; i++) {
     </script>
 </body>
 </html>
-
-
