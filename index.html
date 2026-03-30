@@ -531,7 +531,8 @@
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
             tomorrow.setHours(0, 0, 0, 0);
-            return windowEnd >= tomorrow && windowStart <= displayEnd && windowEnd >= displayStart;
+            return windowEnd >= tomorrow && windowStart <= displayEnd && windowEnd >= displayStart
+              && w.collectionDays >= 2;
           });
 
           return (
