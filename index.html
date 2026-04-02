@@ -384,23 +384,32 @@
             const windows = [];
 
             // ── HOT windows ──────────────────────────────────────────────────────────
-            // Trigger: 2 consecutive days > cutoff.
-            // Collection window = those same 2 trigger days PLUS any additional
-            // consecutive days that are also > cutoff.
-            for (let i = 0; i < temps.length - 1; i++) {
-              if (temps[i] > cutoff && temps[i + 1] > cutoff) {
-                // Extend to cover all consecutive hot days from i onwards
-                let windowEnd = i + 1;
-                while (windowEnd + 1 < temps.length && temps[windowEnd + 1] > cutoff) {
+            // Trigger: 2 consecutive days >= cutoff.
+            // Collection starts on day 3 (first day AFTER the trigger pair),
+            // and continues while days remain >= cutoff.
+            for (let i = 0; i < temps.length - 2; i++) {
+              if (temps[i] >= cutoff && temps[i + 1] >= cutoff) {
+                const windowStart = i + 2;
+
+                // No collection window if day 3 does not reach cutoff
+                if (windowStart >= temps.length || temps[windowStart] < cutoff) {
+                  continue;
+                }
+
+                let windowEnd = windowStart;
+                while (windowEnd + 1 < temps.length && temps[windowEnd + 1] >= cutoff) {
                   windowEnd++;
                 }
+
                 windows.push({
                   type: 'Hot',
-                  collectionStart: dates[i],
+                  collectionStart: dates[windowStart],
                   collectionEnd: dates[windowEnd],
-                  collectionDays: windowEnd - i + 1
+                  collectionDays: windowEnd - windowStart + 1
                 });
-                i = windowEnd; // skip to end of this hot run
+
+                // Skip to end of this hot collection run
+                i = windowEnd;
               }
             }
 
@@ -457,6 +466,22 @@
             }
 
             return windows.sort((a, b) => new Date(a.collectionStart) - new Date(b.collectionStart));
+          };
+
+          const isDateInWindow = (dateStr) => {
+            const windows = findDataCollectionWindows();
+            const date = new Date(dateStr);
+            date.setHours(0, 0, 0, 0);
+
+            return windows.map(w => {
+              const start = new Date(w.collectionStart);
+              const end = new Date(w.collectionEnd);
+              start.setHours(0, 0, 0, 0);
+              end.setHours(0, 0, 0, 0);
+
+              if (date >= start && date <= end) return w.type;
+              return null;
+            }).filter(t => t !== null);
           };
 
           const isToday = (dateStr) => {
@@ -691,18 +716,8 @@
                               tomorrowDate.setHours(0, 0, 0, 0);
                               const isFuture = dayDate >= tomorrowDate;
 
-                              const collectionTypesForLabels = (() => {
-                                const allWin = findDataCollectionWindows();
-                                return allWin.map(w => {
-                                  const d = new Date(day.date); d.setHours(0, 0, 0, 0);
-                                  const s = new Date(w.collectionStart); s.setHours(0, 0, 0, 0);
-                                  const e = new Date(w.collectionEnd); e.setHours(0, 0, 0, 0);
-                                  return (d >= s && d <= e) ? w.type : null;
-                                }).filter(t => t !== null);
-                              })();
-
-                              const collectionTypes = isFuture ? collectionTypesForLabels : [];
-                              const noDataCollection = collectionTypesForLabels.length === 0 && !noDataAvailable;
+                              const collectionTypes = isFuture ? isDateInWindow(day.date) : [];
+                              const noDataCollection = isFuture && collectionTypes.length === 0 && !noDataAvailable;
 
                               const formatDateAbbrev = (dateStr) => {
                                 const date = new Date(dateStr);
@@ -738,10 +753,10 @@
 
                                   {!noDataAvailable && (
                                     <div className="text-[8px] md:text-[10px] font-bold text-center leading-tight px-0.5">
-                                      {collectionTypesForLabels.includes('Hot') && (
+                                      {collectionTypes.includes('Hot') && (
                                         <div className="text-red-700">collect<br/>Hot data</div>
                                       )}
-                                      {collectionTypesForLabels.includes('NotHot') && (
+                                      {collectionTypes.includes('NotHot') && (
                                         <div className="text-teal-700 text-[9px] md:text-[11px] font-bold">collect<br/>Not-Hot data</div>
                                       )}
                                       {noDataCollection && (
