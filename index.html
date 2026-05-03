@@ -382,11 +382,13 @@
             const dates = weatherData.daily.time;
             const cutoff = selectedCity.cutoff;
             const windows = [];
+            const hotWashoutPeriods = []; // 14-day no-collection periods after each Hot window
 
             // ── HOT windows ──────────────────────────────────────────────────────────
             // Trigger: 2 consecutive days >= cutoff.
             // Collection starts on day 3 (first day AFTER the trigger pair),
             // and continues while days remain >= cutoff.
+            // After the hot collection ends, a 14-day washout begins.
             for (let i = 0; i < temps.length - 2; i++) {
               if (temps[i] >= cutoff && temps[i + 1] >= cutoff) {
                 const windowStart = i + 2;
@@ -408,18 +410,37 @@
                   collectionDays: windowEnd - windowStart + 1
                 });
 
+                // 14-day no-data-collection washout immediately after hot collection ends
+                const hotEndDate = new Date(dates[windowEnd]);
+                hotEndDate.setHours(0, 0, 0, 0);
+                const washoutStart = new Date(hotEndDate);
+                washoutStart.setDate(washoutStart.getDate() + 1);
+                const washoutEnd = new Date(hotEndDate);
+                washoutEnd.setDate(washoutEnd.getDate() + 14);
+                hotWashoutPeriods.push({ start: washoutStart, end: washoutEnd });
+
                 // Skip to end of this hot collection run
                 i = windowEnd;
               }
             }
 
+            // Helper: is day index i inside any hot washout period?
+            const isInHotWashout = (i) => {
+              const d = new Date(dates[i]);
+              d.setHours(0, 0, 0, 0);
+              return hotWashoutPeriods.some(p => d >= p.start && d <= p.end);
+            };
+
             // ── NOT-HOT windows ───────────────────────────────────────────────────────
             // Trigger: temp 15–25°C, but only after the required washout has elapsed
-            // since the most recent spike above 27°C.
+            // since the most recent spike above 27°C, AND not within a 14-day hot washout.
             // Washout rule: 1-day spike → 2 days; 2-day spike → 4 days; 3+ days → 7 days.
             // If there has never been a spike, no washout is required.
             for (let i = 0; i < temps.length; i++) {
               if (temps[i] >= 15 && temps[i] <= 25) {
+                // Block collection during 14-day post-hot washout
+                if (isInHotWashout(i)) continue;
+
                 const requiredWashout = getRequiredWashout(temps, i);
 
                 let hasValidCoolPeriod = false;
@@ -440,8 +461,14 @@
 
                 if (hasValidCoolPeriod) {
                   // Extend the NotHot window as long as temps stay 15–25°C
+                  // and we haven't entered a hot washout period
                   let windowEnd = i;
-                  while (windowEnd + 1 < temps.length && temps[windowEnd + 1] >= 15 && temps[windowEnd + 1] <= 25) {
+                  while (
+                    windowEnd + 1 < temps.length &&
+                    temps[windowEnd + 1] >= 15 &&
+                    temps[windowEnd + 1] <= 25 &&
+                    !isInHotWashout(windowEnd + 1)
+                  ) {
                     windowEnd++;
                   }
 
@@ -612,7 +639,7 @@
                           <p className="text-sm text-gray-600">Hot collection threshold: <span className="font-bold text-red-600">{selectedCity.cutoff}°C</span> | NotHot collection range: <span className="font-bold text-teal-700">15–25°C</span></p>
                         </div>
                         <div className="text-xs font-bold text-gray-900 bg-white px-3 py-1 rounded-full border border-gray-300">
-                          🔥 Hot: 2+ days above cutoff &nbsp;|&nbsp; ☁️ Not-Hot: 15–25°C after washout (1/2/3+ day spike →  2/4/7 days)
+                          🔥 Hot: 2+ days above cutoff &nbsp;|&nbsp; ☁️ Not-Hot: 15–25°C after washout (1/2/3+ day spike → 2/4/7 days) &nbsp;|&nbsp; 14-day washout after Hot collection
                         </div>
                       </div>
                     </div>
