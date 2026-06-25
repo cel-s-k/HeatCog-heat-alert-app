@@ -379,12 +379,12 @@ const CITIES = [
 
 // ── Logic ──────────────────────────────────────────────────────────────────────
 
-function getRequiredWashout(temps, i) {
+function getRequiredWashout(temps, i, blue) {
   var spikeEnd = -1;
-  for (var j = i-1; j >= 0; j--) { if (temps[j] > 27) { spikeEnd = j; break; } }
+  for (var j = i-1; j >= 0; j--) { if (temps[j] > blue) { spikeEnd = j; break; } }
   if (spikeEnd === -1) return 0;
   var spikeStart = spikeEnd;
-  while (spikeStart > 0 && temps[spikeStart-1] > 27) spikeStart--;
+  while (spikeStart > 0 && temps[spikeStart-1] > blue) spikeStart--;
   var len = spikeEnd - spikeStart + 1;
   return len === 1 ? 2 : len === 2 ? 4 : 7;
 }
@@ -432,13 +432,13 @@ function findWindows(weatherData, city) {
   for (var i = 0; i < temps.length; i++) {
     if (temps[i] >= 15 && temps[i] <= blue) {
       if (inWashout(i)) continue;
-      var rw = getRequiredWashout(temps, i);
+      var rw = getRequiredWashout(temps, i, blue);
       var valid = false;
       if (rw === 0) {
         valid = true;
       } else {
         var spikeEnd = -1;
-        for (var j = i-1; j >= 0; j--) { if (temps[j] > 27) { spikeEnd = j; break; } }
+        for (var j = i-1; j >= 0; j--) { if (temps[j] > blue) { spikeEnd = j; break; } }
         valid = (i - spikeEnd - 1) >= rw;
       }
       if (valid) {
