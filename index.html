@@ -411,15 +411,18 @@ function findWindows(weatherData, city) {
     }
   }
 
-  // 14-day washout after any hot run
+  // 14-day washout after a hot run of 2+ consecutive days (a single hot day is
+  // instead handled by the 1/2/3+ day spike rule in getRequiredWashout)
   for (var i = 0; i < temps.length; i++) {
     if (temps[i] >= cutoff) {
       var runEnd = i;
       while (runEnd+1 < temps.length && temps[runEnd+1] >= cutoff) runEnd++;
-      var ed = new Date(dates[runEnd]); ed.setHours(0,0,0,0);
-      var ws2 = new Date(ed); ws2.setDate(ws2.getDate()+1);
-      var we2 = new Date(ed); we2.setDate(we2.getDate()+14);
-      washouts.push({start:ws2, end:we2});
+      if (runEnd - i + 1 >= 2) {
+        var ed = new Date(dates[runEnd]); ed.setHours(0,0,0,0);
+        var ws2 = new Date(ed); ws2.setDate(ws2.getDate()+1);
+        var we2 = new Date(ed); we2.setDate(we2.getDate()+14);
+        washouts.push({start:ws2, end:we2});
+      }
       i = runEnd;
     }
   }
